@@ -327,6 +327,36 @@ def build_noop_providers() -> None:
     metrics.set_meter_provider(NoOpMeterProvider())
 
 
+def _build_span_emitter_provider(service_name: str, span_exporter=None):
+    """Build the trace provider used by ``nemo-lens emit-spans``."""
+    try:
+        from opentelemetry import trace
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    except ImportError as exc:
+        raise ImportError(
+            "nemo-lens emit-spans requires OpenTelemetry SDK dependencies. "
+            "Install with: pip install 'nemo-lens[sdk]'"
+        ) from exc
+
+    if span_exporter is None:
+        from nemo.lens.config import NemoLensConfig
+
+        exporter = "otlp" if os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT") else "console"
+        span_exporter = _build_span_exporter(
+            NemoLensConfig(enabled=True, service_name=service_name, exporter=exporter)
+        )
+
+    provider = TracerProvider(
+        resource=Resource.create({"service.name": service_name}),
+        id_generator=SeedIndependentIdGenerator(),
+    )
+    provider.add_span_processor(BatchSpanProcessor(span_exporter))
+    trace.set_tracer_provider(provider)
+    return provider
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------

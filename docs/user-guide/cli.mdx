@@ -1,0 +1,52 @@
+---
+title: "Command Line"
+description: ""
+position: 3
+---
+NeMo Lens installs a `nemo-lens` command for launch scripts and other process
+boundaries that need to emit telemetry outside a normal Python application
+lifecycle.
+
+## `emit-spans`
+
+`emit-spans` emits completed spans from explicit Unix epoch-second intervals.
+Use it when a shell launcher or wrapper has already measured a start and end
+time and needs to export that interval as a trace span.
+
+Install the SDK dependencies before using the command:
+
+```bash
+pip install 'nemo-lens[sdk]'
+```
+
+Pass one or more `--span` values:
+
+```bash
+nemo-lens emit-spans \
+  --service nv.dl.launch \
+  --span launch,1700000000.0,1700000003.0 \
+  --span python_startup,1700000000.2,1700000001.1,launch
+```
+
+Each span is encoded as:
+
+```text
+NAME,START_EPOCH_SECONDS,END_EPOCH_SECONDS[,PARENT_NAME]
+```
+
+Parent spans can appear before or after their children on the command line. The
+command orders them before emission so the exported spans have parent context.
+Parent/child intervals are not required to be nested; launch flows sometimes use
+short anchor spans as parents for longer measured work.
+
+If any span input is invalid, nothing is emitted. Invalid input includes
+malformed fields, duplicate span names, missing parents, parent cycles,
+non-finite timestamps, and end times before start times.
+
+`--service` sets the exported `service.name`. Other attributes from
+`OTEL_RESOURCE_ATTRIBUTES` are inherited by the SDK resource detector, but
+`--service` takes precedence over `service.name` from the environment.
+
+When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the command exports spans through
+OTLP using the same exporter selection logic as NeMo Lens tracing. Without an
+OTLP endpoint, it writes spans with the console exporter.
